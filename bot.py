@@ -78,25 +78,33 @@ def ask_gemini(chat_id: int, user_text: str) -> str:
         "tools": [{"google_search": {}}],
     }).encode("utf-8")
 
-    req = urllib.request.Request(
-        GEMINI_URL,
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    try:
+        req = urllib.request.Request(
+            GEMINI_URL,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
 
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            response_text = resp.read().decode("utf-8")
 
-    reply = (
-        data.get("candidates", [{}])[0]
-        .get("content", {})
-        .get("parts", [{}])[0]
-        .get("text", "Не удалось получить ответ, попробуйте ещё раз.")
-    )
+        logger.info(f"GEMINI RESPONSE: {response_text}")
 
-    history.append({"role": "model", "parts": [{"text": reply}]})
-    return reply
+        data = json.loads(response_text)
+        reply = (
+            data.get("candidates", [{}])[0]
+            .get("content", {})
+            .get("parts", [{}])[0]
+            .get("text", "Не удалось получить ответ.")
+        )
+
+        history.append({"role": "model", "parts": [{"text": reply}]})
+        return reply
+
+    except Exception as e:
+        logger.exception("GEMINI ERROR")
+        return f"Ошибка Gemini: {e}"
 
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
