@@ -43,7 +43,9 @@ def search_vacancies(query: str, limit: int = 5):
             headers={"User-Agent": "JobBot/1.0 (job search telegram bot)"}
         )
         data = urllib.request.urlopen(req, timeout=10).read()
-        items = json.loads(data).get("items", [])
+        parsed = json.loads(data)
+        logger.info(f"HH ответ: {str(parsed)[:500]}")
+        items = parsed.get("items", [])
         results = []
         for v in items:
             name = v.get("name", "—")
