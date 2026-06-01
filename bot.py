@@ -1,11 +1,39 @@
+import os
+import logging
 import urllib.request
 import urllib.parse
-import feedparser
+import json
 
-def search_vacancies(query: str, limit: int = 5):
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    level=logging.INFO
+)
+
+logger = logging.getLogger(__name__)
+
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+if not TELEGRAM_TOKEN:
+    logger.error("❌ TELEGRAM_TOKEN не задан")
+    exit(1)
+
+MAIN_KEYBOARD = ReplyKeyboardMarkup(
+    [
+        ["Python", "Designer"],
+        ["Frontend", "Backend"],
+        ["Курьер", "Менеджер"],
+    ],
+    resize_keyboard=True,
+)
+
+# ── HH API (СТАБИЛЬНО) ─────────────────────────────
+def search_hh(query: str, limit: int = 5):
     encoded = urllib.parse.quote(query)
 
-    url = f"https://hh.ru/rss/vacancies?text={encoded}&area=1"
+    url = f"https://api.hh.ru/vacancies?text={encoded}&per_page={limit}"
 
     req = urllib.request.Request(
         url,
@@ -14,73 +42,65 @@ def search_vacancies(query: str, limit: int = 5):
 
     try:
         response = urllib.request.urlopen(req, timeout=10)
-        data = response.read()
-
-        feed = feedparser.parse(data)
+        data = json.loads(response.read().decode("utf-8"))
 
         results = []
-        for entry in feed.entries[:limit]:
-            results.append(f"💼 {entry.title}\n🔗 {entry.link}")
 
-        # если hh пустой — fallback
-        if results:
-            return results
+        for item in data.get("items", []):
+            title = item.get("name")
+            company = item.get("employer", {}).get("name", "Неизвестно")
+            link = item.get("alternate_url")
 
-    except Exception:
-        pass
+            results.append(
+                f"💼 {title}\n🏢 {company}\n🔗 {link}"
+            )
 
-    # fallback (второй источник)
-    url2 = f"https://www.superjob.ru/rss/vacancies.xml?keywords={encoded}"
-    feed2 = feedparser.parse(url2)
+        return results
 
-    results2 = []
-    for entry in feed2.entries[:limit]:
-        results2.append(f"💼 {entry.title}\n🔗 {entry.link}")
-
-    return results2
+    except Exception as e:
+        logger.error(f"HH API error: {e}")
+        return []
 
 
-async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+# ── Telegram handlers ─────────────────────────────
+async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 Я JobBot\n\nНапиши профессию или выбери кнопку 👇",
+        "👋 JobBot 2.0 запущен!\n\nНапиши профессию:",
         reply_markup=MAIN_KEYBOARD
     )
 
 
-async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+async def help_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Напиши что ищешь:\n"
-        "• python\n"
-        "• дизайнер\n"
-        "• курьер\n"
-        "И я найду вакансии"
+        "Просто напиши:\n"
+        "Python\nDesigner\nFrontend\nBackend\nКурьер"
     )
 
 
-async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     await update.message.chat.send_action("typing")
 
-    query = text.replace(" ", "+")
+    results = search_hh(text)
 
-    vacancies = search_vacancies(query)
-
-    if not vacancies:
-        await update.message.reply_text("⚠️ Пока нет вакансий по запросу. Попробуй другое слово.")
+    if not results:
+        await update.message.reply_text(
+            "⚠️ Вакансий не найдено. Попробуй другое слово."
+        )
         return
 
-    for v in vacancies:
-        await update.message.reply_text(v)
+    for r in results:
+        await update.message.reply_text(r)
 
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", cmd_start))
-    app.add_handler(CommandHandler("help", cmd_help))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_cmd))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-    logger.info("✅ JobBot запущен")
+    logger.info("✅ JobBot 2.0 запущен")
     app.run_polling()
 
 
