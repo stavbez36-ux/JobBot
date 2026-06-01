@@ -3,6 +3,7 @@ import logging
 import urllib.request
 import urllib.parse
 import feedparser
+import json
 
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -31,40 +32,33 @@ KEYBOARD = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# ── RSS ИСТОЧНИКИ (СТАБИЛЬНЫЕ) ──────────────────────
-def build_urls(query: str):
-    q = urllib.parse.quote(query)
-
-    return [
-        f"https://hh.ru/rss/vacancies?text={q}&area=1",
-        f"https://www.superjob.ru/rss/vacancies.xml?keywords={q}",
-    ]
 
 # ── ПОИСК ВАКАНСИЙ ───────────────────────────────────
 def search_vacancies(query: str, limit: int = 5):
-    urls = build_urls(query)
-
-    results = []
-
-    for url in urls:
-        try:
-            req = urllib.request.Request(
-                url,
-                headers={"User-Agent": "Mozilla/5.0"}
-            )
-
-            data = urllib.request.urlopen(req, timeout=10).read()
-            feed = feedparser.parse(data)
-
-            for entry in feed.entries[:limit]:
-                results.append(
-                    f"💼 {entry.title}\n🔗 {entry.link}"
-                )
-
-        except Exception as e:
-            logger.error(f"RSS error: {e}")
-            logger.error(f"URL was: {url}")
-    return results[:limit]
+    q = urllib.parse.quote(query)
+    url = f"https://api.hh.ru/vacancies?text={q}&per_page={limit}&area=113"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "JobBot/1.0 (job search telegram bot)"}
+        )
+        data = urllib.request.urlopen(req, timeout=10).read()
+        items = json.loads(data).get("items", [])
+        results = []
+        for v in items:
+            name = v.get("name", "—")
+            employer = v.get("employer", {}).get("name", "—")
+            salary = v.get("salary")
+            link = v.get("alternate_url", "—")
+            if salary:
+                sal = f"{salary.get('from', '')}–{salary.get('to', '')} {salary.get('currency', '')}".strip("–")
+            else:
+                sal = "не указана"
+            results.append(f"💼 {name}\n🏢 {employer}\n💰 {sal}\n🔗 {link}")
+        return results
+    except Exception as e:
+        logger.error(f"HH API error: {e}")
+        return []
 
 # ── HANDLERS ────────────────────────────────────────
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -109,3 +103,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
