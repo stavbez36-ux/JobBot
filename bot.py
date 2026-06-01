@@ -1,42 +1,43 @@
-import os
-import logging
+import urllib.request
+import urllib.parse
 import feedparser
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-
-logging.basicConfig(
-    format="%(asctime)s | %(levelname)s | %(message)s",
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-
-if not TELEGRAM_TOKEN:
-    logger.error("❌ Нет TELEGRAM_TOKEN")
-    exit(1)
-
-MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [
-        ["💻 Удалёнка", "📦 Подработка"],
-        ["🎨 Дизайнер", "📞 Продажи"],
-        ["🚗 Курьер", "💡 Другое"],
-    ],
-    resize_keyboard=True,
-)
 
 def search_vacancies(query: str, limit: int = 5):
-    url = f"https://hh.ru/rss/vacancies?text={query}&area=1"
-    feed = feedparser.parse(url)
+    encoded = urllib.parse.quote(query)
 
-    results = []
+    url = f"https://hh.ru/rss/vacancies?text={encoded}&area=1"
 
-    for entry in feed.entries[:limit]:
-        title = entry.title
-        link = entry.link
-        results.append(f"💼 {title}\n🔗 {link}")
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0"}
+    )
 
-    return results
+    try:
+        response = urllib.request.urlopen(req, timeout=10)
+        data = response.read()
+
+        feed = feedparser.parse(data)
+
+        results = []
+        for entry in feed.entries[:limit]:
+            results.append(f"💼 {entry.title}\n🔗 {entry.link}")
+
+        # если hh пустой — fallback
+        if results:
+            return results
+
+    except Exception:
+        pass
+
+    # fallback (второй источник)
+    url2 = f"https://www.superjob.ru/rss/vacancies.xml?keywords={encoded}"
+    feed2 = feedparser.parse(url2)
+
+    results2 = []
+    for entry in feed2.entries[:limit]:
+        results2.append(f"💼 {entry.title}\n🔗 {entry.link}")
+
+    return results2
 
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
