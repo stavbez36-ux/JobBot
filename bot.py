@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
 if not TELEGRAM_TOKEN:
     logger.error("❌ TELEGRAM_TOKEN не задан")
@@ -63,7 +63,7 @@ def search_vacancies(query: str, limit: int = 5):
 
         except Exception as e:
             logger.error(f"RSS error: {e}")
-
+            logger.error(f"URL was: {url}")
     return results[:limit]
 
 # ── HANDLERS ────────────────────────────────────────
