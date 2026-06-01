@@ -16,8 +16,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ── Токены ───────────────────────────────────────────────────────────────────
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 
 if not TELEGRAM_TOKEN or not GEMINI_API_KEY:
     logger.error("❌ Не заданы TELEGRAM_TOKEN или GEMINI_API_KEY")
