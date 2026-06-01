@@ -79,9 +79,10 @@ async def help_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
+    logger.info(f"Получен запрос: {text}")
     await update.message.chat.send_action("typing")
-
     results = search_vacancies(text)
+    logger.info(f"Найдено вакансий: {len(results)}")
 
     if not results:
         await update.message.reply_text(
